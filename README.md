@@ -8,7 +8,7 @@ Send Grams as a sealed surprise. The amount stays hidden until the recipient tap
 
 1. In a private chat, open the attachment menu and tap **Money**.
 2. Enter an amount and an optional note, turn on **Send as Surprise**, and send.
-3. The recipient gets the usual Gram transfer card, but the amount is covered with spoiler dust, the note is hidden and the ribbon says **Surprise**. The chat list and the notification only say *"Name sent you a Surprise"*, with no amount.
+3. The recipient gets the usual Gram transfer card, but the amount is covered with spoiler dust, the note is hidden and the ribbon says **Surprise**. The chat list and the notification only say *"Name sent you a 🎁 Surprise"*, with no amount.
 4. One tap opens it. The dust scatters, the digits decode into the real amount, the address re-hashes for a moment, the diamond spins, the ribbon turns from **Surprise** to **Received**, the note appears and confetti plays.
 5. On the sender's side, the card switches from **Surprise** to **Opened** as soon as it's opened.
 
@@ -22,7 +22,6 @@ Send Grams as a sealed surprise. The amount stays hidden until the recipient tap
 
 - `demo.mp4`: the full flow on both sides
 - `surprise.patch`: the implementation for [Telegram Android](https://github.com/DrKLO/Telegram) 13.0.2
-- `TMessagesProj/`: the changed source files in full, for easy reading
 - [IMPLEMENTATION.md](IMPLEMENTATION.md): how it works, what is real and what is demo-only, and what production would need
 
 ## Try it
