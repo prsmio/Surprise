@@ -1,0 +1,772 @@
+diff --git a/TMessagesProj/src/main/java/org/telegram/messenger/MessageObject.java b/TMessagesProj/src/main/java/org/telegram/messenger/MessageObject.java
+index ec503d9..ea4f014 100644
+--- a/TMessagesProj/src/main/java/org/telegram/messenger/MessageObject.java
++++ b/TMessagesProj/src/main/java/org/telegram/messenger/MessageObject.java
+@@ -1922,7 +1922,7 @@ public class MessageObject {
+         this.searchType = searchType;
+ 
+         currentAccount = accountNum;
+-        messageOwner = message;
++        messageOwner = org.telegram.ui.Wallet.SurpriseDemo.convert(message);
+         replyMessageObject = replyToMessage;
+         eventId = eid;
+         wasUnread = !messageOwner.out && messageOwner.unread;
+@@ -5958,6 +5958,10 @@ public class MessageObject {
+                     } else {
+                         messageTextShort = AndroidUtilities.replaceTags(LocaleController.formatString(R.string.WalletActionReceivedGrams, GramWallet.formatGramsWithUnit(action.amount)).replace("un1", "").trim());
+                     }
++                    if (org.telegram.ui.Wallet.SurpriseDemo.isSealed(this)) {
++                        messageText = org.telegram.ui.Wallet.SurpriseDemo.sealedText(fromObject);
++                        messageTextShort = messageText;
++                    }
+                 }
+             }
+         } else {
+diff --git a/TMessagesProj/src/main/java/org/telegram/messenger/NotificationsController.java b/TMessagesProj/src/main/java/org/telegram/messenger/NotificationsController.java
+index ac2f0cb..2e2dc45 100644
+--- a/TMessagesProj/src/main/java/org/telegram/messenger/NotificationsController.java
++++ b/TMessagesProj/src/main/java/org/telegram/messenger/NotificationsController.java
+@@ -412,6 +412,7 @@ public class NotificationsController extends BaseController implements Notificat
+     }
+ 
+     private String getGramTransferNotification(MessageObject messageObject, String name) {
++        if (org.telegram.ui.Wallet.SurpriseDemo.isSealed(messageObject)) return org.telegram.ui.Wallet.SurpriseDemo.sealedNotification(name);
+         TLRPC.TL_messageActionGramTransfer action = (TLRPC.TL_messageActionGramTransfer) messageObject.messageOwner.action;
+         boolean unknown = UserObject.isService(messageObject.getDialogId());
+         boolean comment = !action.comment_encrypted && !TextUtils.isEmpty(action.comment);
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Cells/ChatActionCell.java b/TMessagesProj/src/main/java/org/telegram/ui/Cells/ChatActionCell.java
+index 1392f2c..5f4933b 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Cells/ChatActionCell.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Cells/ChatActionCell.java
+@@ -683,6 +683,7 @@ public class ChatActionCell extends BaseCell implements DownloadController.FileD
+             final String peerUsername = UserObject.isService(peerDialogId)
+                 ? LocaleController.getString(R.string.WalletUnknownUser)
+                 : messageObject.messageOwner.peer_id == null ? null : DialogObject.getName(messagesController.getUserOrChat(peerDialogId));
++            org.telegram.ui.Wallet.SurpriseDemo.bind(walletActionLayout, messageObject);
+             walletActionLayout.set(
+                 messageObject.isOutOwner(),
+                 (TLRPC.TL_messageActionGramTransfer) messageObject.messageOwner.action,
+@@ -2222,7 +2223,7 @@ public class ChatActionCell extends BaseCell implements DownloadController.FileD
+         if (messageObject != null) {
+             if (hasWalletActionLayout()) {
+                 final TLRPC.TL_messageActionGramTransfer action = (TLRPC.TL_messageActionGramTransfer) messageObject.messageOwner.action;
+-                final CharSequence worth = GramWallet.getInstance(currentAccount).formatCurrency(action.amount);
++                final CharSequence worth = (messageObject.messageText != null && messageObject.messageText.toString().contains("Surprise")) ? null : GramWallet.getInstance(currentAccount).formatCurrency(action.amount); // Surprise: no fiat value while sealed
+                 if (!TextUtils.isEmpty(worth)) {
+                     text = LocaleController.formatSpannable(R.string.WalletTransferWorth, AnimatedEmojiSpan.cloneSpans(messageObject.messageText), worth);
+                 }
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/ChatActivity.java b/TMessagesProj/src/main/java/org/telegram/ui/ChatActivity.java
+index 9dec6be..723dad8 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/ChatActivity.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/ChatActivity.java
+@@ -22534,7 +22534,7 @@ public class ChatActivity extends BaseFragment implements
+                         obj.messageOwner.grouped_id = grouped_id;
+                     }
+                     TLRPC.MessageFwdHeader fwdHeader = obj.messageOwner.fwd_from;
+-                    obj.messageOwner = newMsgObj;
++                    obj.messageOwner = org.telegram.ui.Wallet.SurpriseDemo.convert(newMsgObj);
+                     if (fwdHeader != null && newMsgObj.fwd_from != null && !TextUtils.isEmpty(newMsgObj.fwd_from.from_name)) {
+                         obj.messageOwner.fwd_from = fwdHeader;
+                         obj.isOutOwnerCached = null;
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Components/ChatAttachAlertGramLayout.java b/TMessagesProj/src/main/java/org/telegram/ui/Components/ChatAttachAlertGramLayout.java
+index d911b67..d44ec65 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Components/ChatAttachAlertGramLayout.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Components/ChatAttachAlertGramLayout.java
+@@ -441,6 +441,7 @@ public class ChatAttachAlertGramLayout extends ChatAttachAlert.AttachAlertLayout
+             openAddCommentAlert();
+         });
+         ScaleStateListAnimator.apply(commentView, .02f, 1.2f);
++        org.telegram.ui.Wallet.SurpriseDemo.addSurpriseToggle(context, centerBottom, resourcesProvider);
+ 
+         insufficientFundsView = new LinkSpanDrawable.LinksTextView(context, resourcesProvider);
+         insufficientFundsView.setTextColor(getThemedColor(Theme.key_text_RedBold));
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Wallet/GramWallet.java b/TMessagesProj/src/main/java/org/telegram/ui/Wallet/GramWallet.java
+index c7a77a5..33aa723 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Wallet/GramWallet.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Wallet/GramWallet.java
+@@ -254,6 +254,7 @@ public class GramWallet implements GramWalletStreaming.IGramWalletStreamingSubsc
+     }
+ 
+     public long getBalance() {
++        if (SurpriseDemo.ENABLED) return SurpriseDemo.getBalance(currentAccount);
+         if (!(state instanceof TL_wallet.TL_walletState)) return 0;
+         final TL_wallet.TL_walletState state = (TL_wallet.TL_walletState) this.state;
+         return state.balance;
+@@ -1449,6 +1450,10 @@ public class GramWallet implements GramWalletStreaming.IGramWalletStreamingSubsc
+     private void send(TLRPC.User user, String address, long amount, String comment, byte[] comment_recipient_public_key,
+                       TL_wallet.nftItem collectible, String domain, Utilities.Callback<String> whenSent,
+                       Utilities.Callback<TL_wallet.walletTransaction> whenQueued) {
++        if (SurpriseDemo.ENABLED && collectible == null && user != null) {
++            SurpriseDemo.send(currentAccount, user, address, amount, comment, whenSent, whenQueued);
++            return;
++        }
+         final String sourceAddress = getAddress();
+         log("send to " + address + ", amount " + amount + ", when ready...");
+         whenReady(() -> {
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Wallet/SurpriseDemo.java b/TMessagesProj/src/main/java/org/telegram/ui/Wallet/SurpriseDemo.java
+new file mode 100644
+index 0000000..a7cd3f0
+--- /dev/null
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Wallet/SurpriseDemo.java
+@@ -0,0 +1,334 @@
++package org.telegram.ui.Wallet;
++
++import android.content.Context;
++import android.content.SharedPreferences;
++import android.graphics.drawable.GradientDrawable;
++import android.text.TextUtils;
++import android.util.Base64;
++import android.util.TypedValue;
++import android.view.Gravity;
++import android.view.HapticFeedbackConstants;
++import android.widget.LinearLayout;
++import android.widget.TextView;
++
++import org.telegram.messenger.AndroidUtilities;
++import org.telegram.messenger.ApplicationLoader;
++import org.telegram.messenger.Emoji;
++import org.telegram.messenger.FileLog;
++import org.telegram.messenger.MessageObject;
++import org.telegram.messenger.SendMessagesHelper;
++import org.telegram.messenger.UserConfig;
++import org.telegram.messenger.Utilities;
++import org.telegram.tgnet.ConnectionsManager;
++import org.telegram.tgnet.TLObject;
++import org.telegram.tgnet.TLRPC;
++import org.telegram.tgnet.tl.TL_wallet;
++import org.telegram.ui.ActionBar.BaseFragment;
++import org.telegram.ui.ActionBar.Theme;
++import org.telegram.ui.ChatActivity;
++import org.telegram.ui.Components.LayoutHelper;
++import org.telegram.ui.Components.Reactions.ReactionsLayoutInBubble;
++import org.telegram.ui.Components.ScaleStateListAnimator;
++import org.telegram.ui.LaunchActivity;
++
++import java.nio.charset.StandardCharsets;
++import java.security.SecureRandom;
++import java.util.ArrayList;
++
++import static org.telegram.messenger.AndroidUtilities.dp;
++
++/**
++ * Surprise — sealed Gram transfers, built on top of Telegram's real Wallet.
++ *
++ * DEMO MODE (this file only): the wallet shows a 2,000 GRAM balance and "Send" does not
++ * touch the blockchain. Instead it delivers a carrier message whose visible text is only
++ * "🎁 Surprise"; the amount, addresses and note travel inside an invisible link. On both
++ * phones the carrier is turned, in memory, into a real Gram-transfer service message, so it
++ * is drawn by Telegram's own wallet card (WalletActionLayout) and the real send flight.
++ *
++ * For production, only this transport layer goes away: a real transfer would carry a
++ * "surprise" flag, and everything in WalletActionLayout stays exactly as it is.
++ */
++public class SurpriseDemo {
++
++    /** Turn the demo off to go back to real transfers. */
++    public static boolean ENABLED = true;
++    public static final long DEMO_BALANCE_NANOS = 2_000L * 1_000_000_000L;
++
++    /** Set by the "Send as Surprise" chip in the Money tab, read by send(). */
++    public static boolean pendingSurprise;
++
++    public static final String TX_DEMO = "demo-";
++    public static final String TX_SURPRISE = "surprise-";
++    public static final String OPENED_REACTION = "\uD83C\uDF89";
++
++    private static final String TEXT_SURPRISE = "\uD83C\uDF81 Surprise";
++    private static final String TEXT_PLAIN = "\uD83D\uDC8E Grams";
++    private static final String URL_PREFIX = "https://telegram.org/gram#v2.";
++    private static final String FALLBACK_ADDRESS = "UQBDEMOWALLETADDRESSFORTHESURPRISEPROTOTYPEXYZ1";
++    private static final int B64 = Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING;
++
++    private static SharedPreferences prefs() {
++        return ApplicationLoader.applicationContext.getSharedPreferences("surprise_demo", Context.MODE_PRIVATE);
++    }
++
++    // ------------------------------------------------------------------ balance
++
++    public static long getBalance(int account) {
++        return Math.max(0, DEMO_BALANCE_NANOS - prefs().getLong("spent_" + account, 0));
++    }
++
++    private static void spend(int account, long amount) {
++        prefs().edit().putLong("spent_" + account, prefs().getLong("spent_" + account, 0) + amount).apply();
++    }
++
++    // ------------------------------------------------------------------ sending
++
++    /** Replaces GramWallet.send() while the demo is on. */
++    public static void send(int account, TLRPC.User user, String toAddress, long amount, String comment,
++                            Utilities.Callback<String> whenSent, Utilities.Callback<TL_wallet.walletTransaction> whenQueued) {
++        final boolean surprise = pendingSurprise;
++        final String txId = (surprise ? TX_SURPRISE : TX_DEMO) + Long.toHexString(new SecureRandom().nextLong() & Long.MAX_VALUE);
++        String fromAddress = null;
++        try {
++            fromAddress = GramWallet.getInstance(account).getAddress();
++        } catch (Exception e) {
++            FileLog.e(e);
++        }
++        final String text = surprise ? TEXT_SURPRISE : TEXT_PLAIN;
++        final TLRPC.TL_messageEntityTextUrl link = new TLRPC.TL_messageEntityTextUrl();
++        link.offset = 0;
++        link.length = text.length();
++        link.url = URL_PREFIX + amount + "." + b64(toAddress) + "." + b64(fromAddress) + "." + b64(comment) + "." + txId;
++        final ArrayList<TLRPC.MessageEntity> entities = new ArrayList<>();
++        entities.add(link);
++
++        // sendMessage() takes the next local id; remember it so the real flight can find the card.
++        final int localId = UserConfig.getInstance(account).lastSendMessageId;
++        SendMessagesHelper.getInstance(account).sendMessage(SendMessagesHelper.SendMessageParams.of(
++                text, user.id, null, null, null, false, entities, null, null, true, 0, 0, null, false));
++        spend(account, amount);
++
++        final TL_wallet.walletTransaction transaction = new TL_wallet.walletTransaction();
++        transaction.id = txId;
++        transaction.localMessageId = localId;
++        transaction.amount = amount;
++        transaction.comment = comment;
++        transaction.date = ConnectionsManager.getInstance(account).getCurrentTime();
++        if (whenQueued != null) {
++            whenQueued.run(transaction);
++        }
++        AndroidUtilities.runOnUIThread(() -> {
++            if (whenSent != null) {
++                whenSent.run(null);
++            }
++        }, 300);
++    }
++
++    // ------------------------------------------------------------------ carrier -> real transfer
++
++    /** Turns a carrier message into a real Gram-transfer service message (in memory only). */
++    public static TLRPC.Message convert(TLRPC.Message m) {
++        if (!ENABLED || m == null || m instanceof TLRPC.TL_messageService || m.entities == null || m.entities.isEmpty()) {
++            return m;
++        }
++        String url = null;
++        for (int i = 0; i < m.entities.size(); i++) {
++            final TLRPC.MessageEntity e = m.entities.get(i);
++            if (e instanceof TLRPC.TL_messageEntityTextUrl && e.url != null && e.url.startsWith(URL_PREFIX)) {
++                url = e.url;
++                break;
++            }
++        }
++        if (url == null) {
++            return m;
++        }
++        try {
++            final String[] p = url.substring(URL_PREFIX.length()).split("\\.", -1);
++            final long amount = Long.parseLong(p[0]);
++            final String to = unb64(p[1]);
++            final String from = unb64(p[2]);
++            final String comment = unb64(p[3]);
++            final String txId = p[4];
++
++            final TLRPC.TL_messageService s = new TLRPC.TL_messageService();
++            s.id = m.id;
++            s.local_id = m.local_id;
++            s.random_id = m.random_id;
++            s.dialog_id = m.dialog_id;
++            s.from_id = m.from_id;
++            s.peer_id = m.peer_id;
++            s.date = m.date;
++            s.out = m.out;
++            s.unread = m.unread;
++            s.media_unread = m.media_unread;
++            s.silent = m.silent;
++            s.send_state = m.send_state;
++            s.reactions = m.reactions;
++            s.attachPath = m.attachPath;
++            s.params = m.params;
++            s.ttl = m.ttl;
++            s.premiumEffectWasPlayed = m.premiumEffectWasPlayed;
++            s.message = "";
++            s.flags = (s.from_id != null ? 256 : 0) | (s.reactions != null ? (1 << 20) : 0);
++
++            final TLRPC.TL_messageActionGramTransfer action = new TLRPC.TL_messageActionGramTransfer();
++            action.amount = amount;
++            final String address = m.out ? to : from;
++            action.peer_address = TextUtils.isEmpty(address) ? FALLBACK_ADDRESS : address;
++            action.transaction_id = txId;
++            action.comment = TextUtils.isEmpty(comment) ? null : comment;
++            s.action = action;
++            return s;
++        } catch (Exception e) {
++            FileLog.e(e);
++            return m;
++        }
++    }
++
++    // ------------------------------------------------------------------ state
++
++    private static TLRPC.TL_messageActionGramTransfer action(MessageObject mo) {
++        if (mo == null || mo.messageOwner == null || !(mo.messageOwner.action instanceof TLRPC.TL_messageActionGramTransfer)) {
++            return null;
++        }
++        return (TLRPC.TL_messageActionGramTransfer) mo.messageOwner.action;
++    }
++
++    private static boolean isDemo(TLRPC.TL_messageActionGramTransfer a) {
++        return a != null && a.transaction_id != null && (a.transaction_id.startsWith(TX_DEMO) || a.transaction_id.startsWith(TX_SURPRISE));
++    }
++
++    private static boolean isSurprise(TLRPC.TL_messageActionGramTransfer a) {
++        return a != null && a.transaction_id != null && a.transaction_id.startsWith(TX_SURPRISE);
++    }
++
++    private static String openedKey(int account, TLRPC.TL_messageActionGramTransfer a) {
++        return "opened_" + account + "_" + a.transaction_id;
++    }
++
++    /** Incoming Surprise that has not been opened yet. */
++    public static boolean isSealed(MessageObject mo) {
++        final TLRPC.TL_messageActionGramTransfer a = action(mo);
++        return isSurprise(a) && !mo.isOutOwner() && !prefs().getBoolean(openedKey(mo.currentAccount, a), false);
++    }
++
++    private static boolean peerReacted(MessageObject mo) {
++        final TLRPC.TL_messageReactions r = mo.messageOwner.reactions;
++        if (r == null || r.results == null) {
++            return false;
++        }
++        for (int i = 0; i < r.results.size(); i++) {
++            final TLRPC.ReactionCount rc = r.results.get(i);
++            if (rc.count - (rc.chosen ? 1 : 0) > 0) {
++                return true;
++            }
++        }
++        return false;
++    }
++
++    /** Chat list / service text while sealed: no amount. */
++    public static CharSequence sealedText(TLObject from) {
++        return MessageObject.replaceWithLink(AndroidUtilities.replaceTags("**un1** sent you a \uD83C\uDF81 Surprise"), "un1", from);
++    }
++
++    public static String sealedNotification(String name) {
++        return name + " sent you a \uD83C\uDF81 Surprise";
++    }
++
++    /** Called by ChatActionCell right before the real card is bound to a message. */
++    public static void bind(WalletActionLayout layout, MessageObject mo) {
++        final TLRPC.TL_messageActionGramTransfer a = action(mo);
++        if (!isDemo(a)) {
++            layout.setSurprise(false, false, false, false, null, null);
++            return;
++        }
++        final boolean surprise = isSurprise(a);
++        final boolean out = mo.isOutOwner();
++        final boolean sealed = surprise && !out && !prefs().getBoolean(openedKey(mo.currentAccount, a), false);
++        final boolean peerOpened = surprise && out && peerReacted(mo);
++        if (!out) {
++            // Our reveal replaces the automatic "received" animation.
++            mo.messageOwner.premiumEffectWasPlayed = true;
++        }
++        layout.setSurprise(true, surprise, sealed, peerOpened, a.transaction_id, sealed ? () -> markOpened(mo) : null);
++    }
++
++    private static void markOpened(MessageObject mo) {
++        final TLRPC.TL_messageActionGramTransfer a = action(mo);
++        if (a == null) {
++            return;
++        }
++        prefs().edit().putBoolean(openedKey(mo.currentAccount, a), true).apply();
++        final BaseFragment fragment = LaunchActivity.getLastFragment();
++        if (fragment instanceof ChatActivity) {
++            ((ChatActivity) fragment).startFireworks();
++        }
++        try {
++            final ReactionsLayoutInBubble.VisibleReaction reaction = ReactionsLayoutInBubble.VisibleReaction.fromEmojicon(OPENED_REACTION);
++            final ArrayList<ReactionsLayoutInBubble.VisibleReaction> list = new ArrayList<>();
++            list.add(reaction);
++            if (fragment != null) {
++                SendMessagesHelper.getInstance(mo.currentAccount).sendReaction(mo, list, reaction, false, false, fragment, null);
++            }
++        } catch (Exception e) {
++            FileLog.e(e);
++        }
++    }
++
++    // ------------------------------------------------------------------ the toggle in the Money tab
++
++    public static void addSurpriseToggle(Context context, LinearLayout parent, Theme.ResourcesProvider resourcesProvider) {
++        if (!ENABLED) {
++            return;
++        }
++        pendingSurprise = false;
++        final TextView chip = new TextView(context);
++        chip.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
++        chip.setTypeface(AndroidUtilities.bold());
++        chip.setGravity(Gravity.CENTER);
++        chip.setPadding(dp(15), dp(7), dp(15), dp(8));
++        final Runnable update = () -> {
++            final GradientDrawable bg = new GradientDrawable();
++            bg.setCornerRadius(dp(18));
++            if (pendingSurprise) {
++                bg.setOrientation(GradientDrawable.Orientation.LEFT_RIGHT);
++                bg.setColors(new int[]{0xFF8E63FF, 0xFF4BB9FE});
++                chip.setTextColor(0xFFFFFFFF);
++            } else {
++                bg.setColor(0x00000000);
++                bg.setStroke(Math.max(1, dp(1)), Theme.getColor(Theme.key_wallet_out_commentBorder, resourcesProvider));
++                chip.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2, resourcesProvider));
++            }
++            chip.setBackground(bg);
++            final String label = pendingSurprise ? "\uD83C\uDF81 Surprise is on" : "\uD83C\uDF81 Send as Surprise";
++            chip.setText(Emoji.replaceEmoji(label, chip.getPaint().getFontMetricsInt(), false));
++        };
++        update.run();
++        chip.setOnClickListener(v -> {
++            pendingSurprise = !pendingSurprise;
++            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
++            update.run();
++        });
++        ScaleStateListAnimator.apply(chip, .02f, 1.2f);
++        parent.addView(chip, LayoutHelper.createLinear(
++                LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT,
++                Gravity.TOP | Gravity.CENTER_HORIZONTAL, 32, 10, 32, 0));
++    }
++
++    // ------------------------------------------------------------------ helpers
++
++    private static String b64(String s) {
++        if (TextUtils.isEmpty(s)) {
++            return "";
++        }
++        return Base64.encodeToString(s.getBytes(StandardCharsets.UTF_8), B64);
++    }
++
++    private static String unb64(String s) {
++        if (TextUtils.isEmpty(s)) {
++            return "";
++        }
++        return new String(Base64.decode(s, B64), StandardCharsets.UTF_8);
++    }
++}
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Wallet/WalletActionLayout.java b/TMessagesProj/src/main/java/org/telegram/ui/Wallet/WalletActionLayout.java
+index 0258365..d15f5f2 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Wallet/WalletActionLayout.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Wallet/WalletActionLayout.java
+@@ -125,6 +125,237 @@ public class WalletActionLayout {
+     private TLRPC.TL_messageActionGramTransfer action;
+     private boolean preparingCommentRevealed;
+     private Text amountText;
++
++    // ------------------------------------------------------------------ Surprise (sealed transfers)
++    // The amount stays hidden under spoiler dust until the recipient taps the card. The reveal reuses
++    // this card's own choreography: momentum spin, bounce, sent particles, ribbon and highlight.
++
++    private static final int SURPRISE_COLOR = 0xFF9466FF;
++    private static final long SURPRISE_DECODE_START = 120;
++    private static final long SURPRISE_DECODE_END = 1150;
++    private static final long SURPRISE_ADDRESS_END = 700;
++
++    private boolean surpriseDemo, surprise, surpriseSealed, surpriseCommentHidden, surprisePeerOpened;
++    private String surpriseBoundTx;
++    private Runnable surpriseOnOpened;
++    private Text surpriseSpoilerText;
++    private final ArrayList<SpoilerEffect> surpriseSpoilers = new ArrayList<>();
++    private final Stack<SpoilerEffect> surpriseSpoilersPool = new Stack<>();
++    private long surpriseRevealStart;
++    private CharSequence surpriseAmountTarget;
++    private Text surpriseDecodeText;
++    private String surpriseDecodeKey;
++    private String surpriseAddress;
++    private boolean surpriseAddressScrambled;
++    private final java.util.Random surpriseRandom = new java.util.Random();
++
++    /** Called right before set(). */
++    public void setSurprise(boolean demo, boolean surprise, boolean sealed, boolean peerOpened, String txId, Runnable onOpened) {
++        final boolean sameTx = txId != null && txId.equals(surpriseBoundTx);
++        final boolean justOpenedByPeer = surprise && sameTx && peerOpened && !surprisePeerOpened;
++        this.surpriseDemo = demo;
++        this.surprise = surprise;
++        if (!sameTx) {
++            surpriseRevealStart = 0;
++            surpriseAddressScrambled = false;
++        }
++        if (surpriseRevealStart == 0) {
++            this.surpriseSealed = surprise && sealed;
++            this.surpriseCommentHidden = this.surpriseSealed;
++        }
++        this.surprisePeerOpened = peerOpened;
++        this.surpriseOnOpened = onOpened;
++        this.surpriseBoundTx = txId;
++        if (justOpenedByPeer) {
++            // Sender side: the other person just opened it.
++            parentView.post(() -> {
++                animateSentBounce();
++                getDiamondRestingYaw();
++                sentSpinMomentum = 14f;
++                sentParticles.sent(0f, 0f);
++                animateHighlight();
++                parentView.invalidate();
++            });
++        }
++    }
++
++    private String surpriseRibbonText(String fallback, boolean failed) {
++        if (!surprise || failed) return fallback;
++        if (out) return surprisePeerOpened ? "Opened" : "Surprise";
++        return surpriseSealed ? "Surprise" : fallback;
++    }
++
++    private int surpriseRibbonColor(int fallback) {
++        if (!surprise) return fallback;
++        if (out) return surprisePeerOpened ? fallback : SURPRISE_COLOR;
++        return surpriseSealed ? SURPRISE_COLOR : fallback;
++    }
++
++    /** Called from set() once the amount text is known. */
++    private void prepareSurprise(CharSequence localizedAmount) {
++        surpriseAmountTarget = localizedAmount;
++        surpriseSpoilersPool.addAll(surpriseSpoilers);
++        surpriseSpoilers.clear();
++        surpriseSpoilerText = null;
++        if (!surpriseSealed) return;
++        // Fixed length, so the dust never hints at how big the number is.
++        final SpannableStringBuilder placeholder = new SpannableStringBuilder("a".repeat(8));
++        final TextStyleSpan.TextStyleRun run = new TextStyleSpan.TextStyleRun();
++        run.flags |= TextStyleSpan.FLAG_STYLE_SPOILER;
++        placeholder.setSpan(new TextStyleSpan(run), 0, placeholder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
++        surpriseSpoilerText = new Text(placeholder, 16, AndroidUtilities.bold());
++        SpoilerEffect.addSpoilers(parentView, surpriseSpoilerText.getLayout(), surpriseSpoilersPool, surpriseSpoilers);
++    }
++
++    /** Draws the amount area for Surprises. Returns false to let the normal amount draw. */
++    private boolean drawSurpriseAmount(Canvas canvas) {
++        final float amountTop = cardRect.top + dp(55);
++        if (surpriseSealed && surpriseRevealStart == 0) {
++            drawSurpriseDust(canvas, amountTop);
++            parentView.invalidate(); // the dust is alive
++            return true;
++        }
++        if (surpriseRevealStart == 0) return false;
++
++        final long t = SystemClock.elapsedRealtime() - surpriseRevealStart;
++        updateSurpriseAddress(t);
++        if (t >= SURPRISE_DECODE_END) {
++            surpriseDecodeText = null;
++            surpriseDecodeKey = null;
++            return false;
++        }
++        if (t < 700) {
++            drawSurpriseDust(canvas, amountTop); // scatters away with the spoiler ripple
++        }
++        if (surpriseAmountTarget != null && t >= 60) {
++            final float p = Math.max(0f, Math.min(1f, (t - SURPRISE_DECODE_START) / (float) (SURPRISE_DECODE_END - SURPRISE_DECODE_START)));
++            final SpannableStringBuilder sb = new SpannableStringBuilder(surpriseAmountTarget);
++            int digits = 0;
++            for (int i = 0; i < sb.length(); i++) if (Character.isDigit(sb.charAt(i))) digits++;
++            final int locked = (int) Math.floor(p * digits + 0.0001f);
++            final long tick = t / 45;
++            int d = 0;
++            for (int i = 0; i < sb.length(); i++) {
++                if (!Character.isDigit(sb.charAt(i))) continue;
++                if (d >= locked) {
++                    surpriseRandom.setSeed(tick * 7919L + i * 31L);
++                    sb.replace(i, i + 1, String.valueOf((char) ('0' + surpriseRandom.nextInt(10))));
++                }
++                d++;
++            }
++            final String key = sb.toString();
++            if (surpriseDecodeText == null || !key.equals(surpriseDecodeKey)) {
++                surpriseDecodeText = new Text(sb, 16, AndroidUtilities.bold());
++                surpriseDecodeKey = key;
++            }
++            final float width = surpriseDecodeText.getWidth();
++            final float maxWidth = cardRect.width() - dp(16);
++            final float scale = width > maxWidth ? maxWidth / width : 1.0f;
++            final float centerY = amountTop + surpriseDecodeText.getHeight() / 2.0f;
++            final float alpha = Math.min(1f, (t - 60) / 240f);
++            canvas.save();
++            canvas.scale(scale, scale, cardRect.centerX(), centerY);
++            surpriseDecodeText.draw(canvas, cardRect.centerX() - width / 2.0f, centerY, 0xFFFFFFFF, alpha);
++            canvas.restore();
++        }
++        parentView.invalidate();
++        return true;
++    }
++
++    private void drawSurpriseDust(Canvas canvas, float amountTop) {
++        if (surpriseSpoilerText == null) return;
++        canvas.save();
++        canvas.translate(cardRect.centerX() - surpriseSpoilerText.getWidth() / 2.0f, amountTop);
++        for (SpoilerEffect spoiler : surpriseSpoilers) {
++            spoiler.setColor(0xFFFFFFFF);
++            spoiler.draw(canvas);
++        }
++        canvas.restore();
++    }
++
++    /** The wallet address re-hashes for a moment while the amount decodes. */
++    private void updateSurpriseAddress(long t) {
++        if (addressText == null || surpriseAddress == null) return;
++        if (t < SURPRISE_ADDRESS_END) {
++            final StringBuilder sb = new StringBuilder(surpriseAddress);
++            final long tick = t / 45;
++            final String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
++            for (int i = 0; i < sb.length(); i++) {
++                if (Character.isLetterOrDigit(sb.charAt(i))) {
++                    surpriseRandom.setSeed(tick * 104729L + i * 17L);
++                    if (surpriseRandom.nextFloat() < 0.55f) {
++                        sb.setCharAt(i, chars.charAt(surpriseRandom.nextInt(chars.length())));
++                    }
++                }
++            }
++            addressText.setText(sb.toString());
++            surpriseAddressScrambled = true;
++        } else if (surpriseAddressScrambled) {
++            addressText.setText(surpriseAddress);
++            surpriseAddressScrambled = false;
++        }
++    }
++
++    /** Tap on a sealed card. */
++    private void startSurpriseReveal() {
++        if (!surpriseSealed || surpriseRevealStart != 0) return;
++        surpriseSealed = false;
++        surpriseRevealStart = SystemClock.elapsedRealtime();
++        try {
++            parentView.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP, android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING);
++        } catch (Exception ignore) {}
++
++        // The card's own "received" choreography, with extra momentum.
++        animateSentBounce();
++        getDiamondRestingYaw();
++        sentSpinMomentum = 30f;
++        sentParticles.sent(0f, 0f);
++
++        // The dust scatters outwards like any Telegram spoiler.
++        if (surpriseSpoilerText != null) {
++            final float cx = surpriseSpoilerText.getWidth() / 2.0f, cy = surpriseSpoilerText.getHeight() / 2.0f;
++            for (SpoilerEffect spoiler : surpriseSpoilers) {
++                spoiler.startRipple(cx, cy, surpriseSpoilerText.getWidth());
++            }
++        }
++
++        // Ribbon: "Surprise" -> "Received", violet -> blue.
++        parentView.postDelayed(() -> {
++            ribbonColorFrom = ribbonColorCurrent;
++            ribbonColorTo = 0xFF4BB9FE;
++            ribbonColorAnimation.force(0);
++            ribbon.setTextAnimated(10, LocaleController.getString(R.string.WalletTransferStatusReceived), true);
++            parentView.invalidate();
++        }, 650);
++
++        // The note appears once the number has settled.
++        parentView.postDelayed(() -> {
++            surpriseCommentHidden = false;
++            if (commentText != null && action != null && !TextUtils.isEmpty(action.comment) && !action.comment_encrypted) {
++                commentSpoilersPool.addAll(commentSpoilers);
++                commentSpoilers.clear();
++                commentText.setText(Emoji.replaceEmoji(action.comment, commentText.paint.getFontMetricsInt(), false));
++                parentView.requestLayout();
++            }
++            parentView.invalidate();
++        }, 900);
++
++        // Done: highlight sweep, confetti, and let the sender know.
++        parentView.postDelayed(() -> {
++            try {
++                parentView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS, android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING);
++            } catch (Exception ignore) {}
++            animateHighlight();
++            if (surpriseOnOpened != null) {
++                surpriseOnOpened.run();
++                surpriseOnOpened = null;
++            }
++            parentView.invalidate();
++        }, SURPRISE_DECODE_END);
++
++        parentView.invalidate();
++    }
++
+     private Text addressText;
+     private Text peerLinkText;
+     private Text commentText;
+@@ -266,7 +497,7 @@ public class WalletActionLayout {
+             parentView.invalidate();
+         }
+         final int newRibbonColor = failed ? Theme.getColor(Theme.key_text_RedBold, resourcesProvider)
+-            : out ? RIBBON_SENT_COLOR : 0xFF4BB9FE;
++            : surpriseRibbonColor(out ? RIBBON_SENT_COLOR : 0xFF4BB9FE);
+         if (ribbonColorTo == 0) {
+             ribbonColorFrom = ribbonColorTo = ribbonColorCurrent = newRibbonColor;
+         } else if (newRibbonColor != ribbonColorTo) {
+@@ -280,9 +511,9 @@ public class WalletActionLayout {
+             : out ? LocaleController.getString(R.string.WalletTransferStatusSent)
+             : LocaleController.getString(R.string.WalletTransferStatusReceived);
+         if (sending) {
+-            ribbon.setText(10, ribbonText, true);
++            ribbon.setText(10, surpriseRibbonText(ribbonText, failed), true);
+         } else {
+-            ribbon.setTextAnimated(10, ribbonText, true);
++            ribbon.setTextAnimated(10, surpriseRibbonText(ribbonText, failed), true);
+         }
+ 
+         final SpannableStringBuilder amount = GramWallet.formatGramsScaled(
+@@ -316,6 +547,7 @@ public class WalletActionLayout {
+             localizedAmount.setSpan(new ForegroundColorSpan(0xFF5DE3FF), numberEnd, localizedAmount.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+         }
+         amountText = new Text(localizedAmount, 16, AndroidUtilities.bold());
++        prepareSurprise(localizedAmount);
+ 
+         final String formattedAddress = WalletCardComponent.formatCardAddress(
+             WalletCardComponent.formatAddress(action.peer_address.toUpperCase(Locale.US))
+@@ -326,6 +558,7 @@ public class WalletActionLayout {
+             AndroidUtilities.getTypeface("fonts/rmono.ttf")
+         ).multiline(2);
+         addressText.setText(formattedAddress);
++        surpriseAddress = formattedAddress;
+ 
+         if (TextUtils.isEmpty(peerLink)) {
+             peerLinkText = null;
+@@ -355,7 +588,7 @@ public class WalletActionLayout {
+                 .multiline(Integer.MAX_VALUE)
+                 .align(Layout.Alignment.ALIGN_CENTER)
+                 .setMaxWidth(dp(192 - 8));
+-            if ((action.comment_encrypted || action.comment_encrypted_preparing) && !preparingCommentRevealed) {
++            if ((action.comment_encrypted || action.comment_encrypted_preparing || surpriseCommentHidden) && !preparingCommentRevealed) {
+                 final SpannableStringBuilder placeholder = new SpannableStringBuilder("a".repeat(25));
+                 final TextStyleSpan.TextStyleRun run = new TextStyleSpan.TextStyleRun();
+                 run.flags |= TextStyleSpan.FLAG_STYLE_SPOILER;
+@@ -480,7 +713,9 @@ public class WalletActionLayout {
+             gramDrawable.draw(canvas);
+         }
+ 
+-        if (amountText != null) {
++        if (surpriseDemo && drawSurpriseAmount(canvas)) {
++            // Surprise: dust while sealed, then the decoding amount
++        } else if (amountText != null) {
+             final float amountWidth = amountText.getWidth();
+             final float amountMaxWidth = cardRect.width() - dp(16);
+             final float amountScale = amountWidth > amountMaxWidth ? amountMaxWidth / amountWidth : 1.0f;
+@@ -543,7 +778,7 @@ public class WalletActionLayout {
+         }
+ 
+         if (commentText != null) {
+-            if ((action.comment_encrypted || action.comment_encrypted_preparing) && !preparingCommentRevealed) {
++            if ((action.comment_encrypted || action.comment_encrypted_preparing || surpriseCommentHidden) && !preparingCommentRevealed) {
+                 canvas.save();
+                 canvas.translate((getWidth() - commentText.getWidth()) / 2.0f, dp(143));
+                 for (SpoilerEffect spoiler : commentSpoilers) {
+@@ -565,6 +800,7 @@ public class WalletActionLayout {
+     }
+ 
+     public boolean playReceiveAnimation(Runnable onEnd) {
++        if (surpriseDemo) return false; // Surprise has its own reveal
+         if (!waitingForReceive || receiveAnimator != null) return false;
+         waitingForReceive = false;
+         onReceiveAnimationEnd = onEnd;
+@@ -931,6 +1167,10 @@ public class WalletActionLayout {
+                 commentSpoilers.clear();
+                 parentView.requestLayout();
+                 parentView.invalidate();
++            } else if (clicked && surpriseSealed) {
++                startSurpriseReveal();
++            } else if (clicked && surpriseDemo) {
++                animateHighlight();
+             } else if (clicked && onClick != null) {
+                 onClick.run();
+             }
